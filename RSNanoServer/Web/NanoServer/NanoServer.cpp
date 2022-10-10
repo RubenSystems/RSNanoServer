@@ -30,35 +30,25 @@ void NanoServer::start() {
 	int max_sd;
 	struct sockaddr_in address;
 
-	
-	//set of socket descriptors
 	fd_set readfds;
 
-	//initialise all client_socket[] to 0 so not checked
-
-
-	//create a master socket
 	if( (master_socket = socket(AF_INET , SOCK_STREAM , 0)) == 0) {
 		perror("socket failed");
 		exit(EXIT_FAILURE);
 	}
 
-	//set master socket to allow multiple connections
 	this->configureSocket(master_socket, true);
 
 	
-	//type of socket created
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = INADDR_ANY;
 	address.sin_port = htons( this->port );
 
-	//bind the socket to localhost port
 	if (bind(master_socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
 		perror("bind failed");
 		exit(EXIT_FAILURE);
 	}
 
-	//try to specify maximum pending connections for the master socket
 	if (listen(master_socket, this->maxPending) < 0) {
 		perror("listen");
 		exit(EXIT_FAILURE);
@@ -68,37 +58,31 @@ void NanoServer::start() {
 	std::cout << "[LOG] - server online\n";
 			 
 	while( true ) {
-		//clear the socket set
 		FD_ZERO(&readfds);
 	 
-		//add master socket to set
 		FD_SET(master_socket, &readfds);
 		max_sd = master_socket;
 			 
-		//add child sockets to set
 		for ( i = 0 ; i < this->maxClients ; i++) {
 			//socket descriptor
 			auto client = this->clientManager->operator[](i);
 			if (client == nullptr) { continue; } else { sd = client->socketNo; }
 			
-			//if valid socket descriptor then add to read list
 			if(sd > 0) {
 				FD_SET(sd , &readfds);
 			}
 				 
-			//highest file descriptor number, need it for the select function
 			if(sd > max_sd) {
 				max_sd = sd;
 			}
 		}
 	 
-		//wait for an activity on one of the sockets, timeout is NULL, so wait indefinitely
 		if (((activity = select(max_sd + 1, &readfds, NULL, NULL, NULL)) < 0) && (errno != EINTR)) {
 			perror("select");
 			exit(EXIT_FAILURE);
 		}
 			 
-		if (FD_ISSET(master_socket, &readfds)) { //If something happened on the master socket, then its an incoming connection
+		if (FD_ISSET(master_socket, &readfds)) { 
 			int new_socket;
 			if ((new_socket = accept(master_socket, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
 				perror("accept");
@@ -109,13 +93,13 @@ void NanoServer::start() {
 			std::string handshake = this->recieve(new_socket).first;
  			std::string message = this->headerManager->generateWebSocketHeader(handshake);
 			
-			//send new connection greeting message
+			
 			::send(new_socket, message.c_str(), message.size(), 0);
 				 
-			//add new socket to array of sockets
+			
 			this->clientManager->addClient(std::make_shared<Client> (new_socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port)));
 
-		} else { //else its some IO operation on some other socket
+		} else { 
 			
 			for (i = 0; i < this->maxClients; i++) {
 				std::shared_ptr<Client> client;
